@@ -46,15 +46,26 @@ const TEMPLATES: Template[] = [
   { headline: "Semis lead: AMD and NVDA push NDX to session highs", category: "Breaking News", markets: ["AMD", "NVDA", "QQQ"], scheduled: false }
 ];
 
-/** Rolling demo stream: a stable backlog + occasional "new" items on refresh. */
+/** Rolling demo stream: a stable backlog that ages naturally, not a fresh
+ * random shuffle every poll. Assigning each headline's timestamp ONCE (on
+ * first request) and reusing it means "17m ago" becomes "18m ago" next
+ * poll like a real feed — not jumping to a random new age every ~15s. */
+const eventTsCache = new Map<string, number>();
+
 export function mockEvents(sourceId: string, sourceName: string, pick: (t: Template) => boolean): CatalystEvent[] {
   const now = Date.now();
   const chosen = TEMPLATES.filter(pick);
   return chosen.map((t, i) => {
-    const age = (i * 7 + Math.floor(rnd() * 6)) % 55; // spread across last ~55 min
+    const key = `${sourceId}-${t.headline}`;
+    let ts = eventTsCache.get(key);
+    if (ts === undefined) {
+      const age = (i * 7 + Math.floor(rnd() * 6)) % 55; // spread across last ~55 min, assigned once
+      ts = now - age * min;
+      eventTsCache.set(key, ts);
+    }
     return {
-      id: `${sourceId}-demo-${t.headline.slice(0, 24)}-${Math.floor(now / (10 * min))}-${i}`,
-      ts: now - age * min,
+      id: `${sourceId}-demo-${t.headline.slice(0, 24)}`,
+      ts,
       source: `${sourceName} (demo)`,
       sourceId,
       live: false,

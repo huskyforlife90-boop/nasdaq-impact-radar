@@ -43,22 +43,30 @@ const STOCKMKTNEWZ_USER_ID = process.env.STOCKMKTNEWZ_USER_ID || "";
 const FRED_API_KEY = process.env.FRED_API_KEY || "";
 
 /** naive in-memory cache so we don't hammer upstream feeds.
- * Failures are cached too (shorter TTL) — without this, a single upstream
- * rate-limit (429) or outage gets re-hit on every poll instead of backing
- * off, which can prolong or worsen the rate limit. */
+ * - Failures are cached (with their own TTL) so a rate-limited or down
+ *   upstream isn't re-hit on every poll — that prolongs rate limits.
+ * - If we have ANY previous good value, we serve it stale during failures
+ *   rather than erroring: a slightly old economic calendar is far better
+ *   than none while an upstream 429 cools off. */
 const cache = new Map();
+const lastGood = new Map();
 async function cached(key, ttlMs, fn, errorTtlMs = 60_000) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.ts < hit.ttl) {
-    if (hit.error) throw new Error(hit.value);
+    if (hit.error) {
+      if (lastGood.has(key)) return lastGood.get(key); // stale-but-real beats nothing
+      throw new Error(hit.value);
+    }
     return hit.value;
   }
   try {
     const value = await fn();
     cache.set(key, { ts: Date.now(), value, ttl: ttlMs, error: false });
+    lastGood.set(key, value);
     return value;
   } catch (err) {
     cache.set(key, { ts: Date.now(), value: String(err), ttl: errorTtlMs, error: true });
+    if (lastGood.has(key)) return lastGood.get(key);
     throw err;
   }
 }
@@ -85,7 +93,7 @@ app.get("/api/forexfactory", async (_req, res) => {
   try {
     const rows = await cached(
       "ff",
-      10 * 60_000,
+      30 * 60_000, // weekly calendar data — 30 min cache is plenty fresh and much kinder to their servers
       async () => {
         const r = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json", {
           headers: { "User-Agent": "nasdaq-impact-radar/0.1 (personal dashboard)" }
@@ -93,7 +101,7 @@ app.get("/api/forexfactory", async (_req, res) => {
         if (!r.ok) throw new Error(`FF feed HTTP ${r.status}`);
         return r.json();
       },
-      5 * 60_000 // back off 5 min on failure (e.g. rate limit) instead of retrying every poll
+      10 * 60_000 // on failure (e.g. rate limit) wait 10 min before retrying; stale data is served meanwhile
     );
     res.json(rows);
   } catch (err) {

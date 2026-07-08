@@ -127,7 +127,16 @@ export function useEngine(voice: VoiceSettings, pollSeconds: number): EngineStat
     () => events.filter((e) => e.ts <= Date.now() && Date.now() - e.ts <= APP.historyWindowMin * 60_000),
     [events, lastRefresh]
   );
-  const meter = useMemo(() => sentimentMeter(pastEvents, context), [pastEvents, context]);
+  const rawMeter = useMemo(() => sentimentMeter(pastEvents, context), [pastEvents, context]);
+  // Smooth the meter so the gauge glides between polls instead of snapping —
+  // raw recalculation each cycle made the needle visibly twitch on every
+  // small quote/context change even when nothing meaningful happened.
+  const smoothedMeter = useRef<number | null>(null);
+  const meter = useMemo(() => {
+    if (smoothedMeter.current === null) smoothedMeter.current = rawMeter;
+    else smoothedMeter.current = smoothedMeter.current * 0.7 + rawMeter * 0.3;
+    return Math.round(smoothedMeter.current);
+  }, [rawMeter]);
   const regime = useMemo(() => regimeFor(meter, context), [meter, context]);
 
   return { events, statuses, context, contextNote, summary, meter, regime, lastRefresh, loading, refresh };

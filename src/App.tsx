@@ -21,7 +21,8 @@ import type { FeedFilters, VoiceSettings } from "./lib/types";
 export default function App() {
   const [voice, setVoice] = usePersistentState<VoiceSettings>("nir.voice", DEFAULT_VOICE_SETTINGS);
   const [filters, setFilters] = usePersistentState<FeedFilters>("nir.filters", EMPTY_FILTERS);
-  const [pollSeconds, setPollSeconds] = usePersistentState<number>("nir.poll", APP.pollSecondsDefault);
+  const [storedPoll, setPollSeconds] = usePersistentState<number>("nir.poll", APP.pollSecondsDefault);
+  const pollSeconds = Math.max(30, storedPoll); // 15s was too aggressive for the free-tier relay; clamp older saved values
 
   const engine = useEngine(voice, pollSeconds);
   const filtered = useMemo(() => applyFilters(engine.events, filters), [engine.events, filters]);

@@ -56,7 +56,7 @@ export default function FilterBar({
           <label className="text-[10px] uppercase tracking-[0.14em] text-txt-low" htmlFor="poll">Auto-refresh</label>
           <select id="poll" value={pollSeconds} onChange={(e) => setPollSeconds(Number(e.target.value))}
             className="rounded border border-ink-line bg-ink-800 px-1.5 py-0.5 text-[11px] text-txt-hi">
-            {[15, 30, 60, 120, 300].map((s) => <option key={s} value={s}>{s}s</option>)}
+            {[30, 60, 120, 300].map((s) => <option key={s} value={s}>{s}s</option>)}
           </select>
           <button onClick={onRefresh} disabled={loading}
             className="chip chip-on disabled:opacity-50">{loading ? "Refreshing…" : "Refresh now"}</button>
