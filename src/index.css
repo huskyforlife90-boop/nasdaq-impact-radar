@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  @apply bg-ink-950 text-txt-hi font-sans antialiased;
+  background-image:
+    radial-gradient(1200px 500px at 70% -10%, rgba(89, 183, 255, 0.06), transparent 60%),
+    radial-gradient(900px 400px at 10% 110%, rgba(47, 211, 135, 0.04), transparent 60%);
+}
+
+.panel {
+  @apply bg-ink-900/90 border border-ink-line rounded-lg;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.35);
+}
+
+.panel-title {
+  @apply flex items-center gap-2 px-3.5 pt-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-txt-low;
+}
+
+.chip {
+  @apply inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium border border-ink-line bg-ink-800 text-txt-mid cursor-pointer select-none transition-colors;
+}
+.chip:hover { @apply border-ink-600 text-txt-hi; }
+.chip-on { @apply border-accent/60 bg-accent/10 text-accent; }
+
+.sev-yellow { color: #E8C547; }
+.sev-orange { color: #F08C3C; }
+.sev-red { color: #EF4351; }
+.bg-sev-yellow { background: #E8C547; }
+.bg-sev-orange { background: #F08C3C; }
+.bg-sev-red { background: #EF4351; }
+
+@keyframes tape-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.tape-track { animation: tape-scroll 55s linear infinite; }
+.tape-track:hover { animation-play-state: paused; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.live-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tape-track { animation: none; }
+  .live-dot { animation: none; }
+}
+
+*:focus-visible { outline: 2px solid #59B7FF; outline-offset: 1px; border-radius: 4px; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #273047; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
