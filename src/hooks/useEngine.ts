@@ -56,8 +56,11 @@ export function useEngine(voice: VoiceSettings, pollSeconds: number): EngineStat
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
   const lastSummaryTs = useRef(0);
+  const inFlight = useRef(false); // guards against overlapping polls if one runs long (e.g. cold-starting relay)
 
   const refresh = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
     try {
       const [results, ctxRes] = await Promise.all([
@@ -110,6 +113,7 @@ export function useEngine(voice: VoiceSettings, pollSeconds: number): EngineStat
       }
     } finally {
       setLoading(false);
+      inFlight.current = false;
     }
   }, [pollSeconds]);
 

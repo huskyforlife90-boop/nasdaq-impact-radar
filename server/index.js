@@ -42,14 +42,25 @@ const X_BEARER_TOKEN = process.env.X_BEARER_TOKEN || "";
 const STOCKMKTNEWZ_USER_ID = process.env.STOCKMKTNEWZ_USER_ID || "";
 const FRED_API_KEY = process.env.FRED_API_KEY || "";
 
-/** naive in-memory cache so we don't hammer upstream feeds */
+/** naive in-memory cache so we don't hammer upstream feeds.
+ * Failures are cached too (shorter TTL) — without this, a single upstream
+ * rate-limit (429) or outage gets re-hit on every poll instead of backing
+ * off, which can prolong or worsen the rate limit. */
 const cache = new Map();
-async function cached(key, ttlMs, fn) {
+async function cached(key, ttlMs, fn, errorTtlMs = 60_000) {
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.ts < ttlMs) return hit.value;
-  const value = await fn();
-  cache.set(key, { ts: Date.now(), value });
-  return value;
+  if (hit && Date.now() - hit.ts < hit.ttl) {
+    if (hit.error) throw new Error(hit.value);
+    return hit.value;
+  }
+  try {
+    const value = await fn();
+    cache.set(key, { ts: Date.now(), value, ttl: ttlMs, error: false });
+    return value;
+  } catch (err) {
+    cache.set(key, { ts: Date.now(), value: String(err), ttl: errorTtlMs, error: true });
+    throw err;
+  }
 }
 
 app.get("/api/health", (_req, res) => {
@@ -72,13 +83,18 @@ app.get("/api/health", (_req, res) => {
  */
 app.get("/api/forexfactory", async (_req, res) => {
   try {
-    const rows = await cached("ff", 10 * 60_000, async () => {
-      const r = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json", {
-        headers: { "User-Agent": "nasdaq-impact-radar/0.1 (personal dashboard)" }
-      });
-      if (!r.ok) throw new Error(`FF feed HTTP ${r.status}`);
-      return r.json();
-    });
+    const rows = await cached(
+      "ff",
+      10 * 60_000,
+      async () => {
+        const r = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json", {
+          headers: { "User-Agent": "nasdaq-impact-radar/0.1 (personal dashboard)" }
+        });
+        if (!r.ok) throw new Error(`FF feed HTTP ${r.status}`);
+        return r.json();
+      },
+      5 * 60_000 // back off 5 min on failure (e.g. rate limit) instead of retrying every poll
+    );
     res.json(rows);
   } catch (err) {
     res.status(502).json({ error: String(err) });

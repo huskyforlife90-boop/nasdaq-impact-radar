@@ -102,24 +102,58 @@ export function mockCalendar(): CatalystEvent[] {
   }));
 }
 
+// Demo context drifts slightly between polls instead of fully re-randomizing —
+// full independent randomization every ~15s poll made numbers jump around
+// jarringly. A cached baseline nudged by small deltas reads like a real,
+// gently-moving quote feed instead.
+let cachedCtx: MarketContext | null = null;
+
+function nudge(value: number, magnitude: number, min?: number, max?: number): number {
+  let next = value + (rnd() - 0.5) * magnitude;
+  if (min !== undefined) next = Math.max(min, next);
+  if (max !== undefined) next = Math.min(max, next);
+  return next;
+}
+
 export function mockContext(): MarketContext {
-  const j = () => (rnd() - 0.5) * 0.4;
-  const quotes: Quote[] = WATCHLIST.map((s) => ({
-    symbol: s,
-    last: s === "NQ" ? 21500 + rnd() * 200 : s === "QQQ" ? 520 + rnd() * 5 : 100 + rnd() * 400,
-    chgPct: (rnd() - 0.45) * 2.4,
-    live: false
-  }));
-  return {
-    live: false,
-    vix: 15.8 + rnd() * 4,
-    vixChg: (rnd() - 0.45) * 1.4,
-    dxy: 104.2 + j(),
-    dxyChg: (rnd() - 0.5) * 0.5,
-    us10y: 4.31 + j() / 10,
-    us10yChgBps: (rnd() - 0.45) * 8,
-    esChgPct: (rnd() - 0.45) * 1.2,
-    nqChgPct: (rnd() - 0.45) * 1.8,
-    quotes
+  if (!cachedCtx) {
+    const j = () => (rnd() - 0.5) * 0.4;
+    const quotes: Quote[] = WATCHLIST.map((s) => ({
+      symbol: s,
+      last: s === "NQ" ? 21500 + rnd() * 200 : s === "QQQ" ? 520 + rnd() * 5 : 100 + rnd() * 400,
+      chgPct: (rnd() - 0.45) * 2.4,
+      live: false
+    }));
+    cachedCtx = {
+      live: false,
+      vix: 15.8 + rnd() * 4,
+      vixChg: (rnd() - 0.45) * 1.4,
+      dxy: 104.2 + j(),
+      dxyChg: (rnd() - 0.5) * 0.5,
+      us10y: 4.31 + j() / 10,
+      us10yChgBps: (rnd() - 0.45) * 8,
+      esChgPct: (rnd() - 0.45) * 1.2,
+      nqChgPct: (rnd() - 0.45) * 1.8,
+      quotes
+    };
+    return cachedCtx;
+  }
+
+  // Small drift on repeat calls, not a fresh independent sample.
+  cachedCtx = {
+    ...cachedCtx,
+    vix: nudge(cachedCtx.vix ?? 18, 0.3, 10, 40),
+    vixChg: nudge(cachedCtx.vixChg ?? 0, 0.15, -3, 3),
+    dxy: nudge(cachedCtx.dxy ?? 104, 0.06, 95, 115),
+    dxyChg: nudge(cachedCtx.dxyChg ?? 0, 0.05, -1.5, 1.5),
+    us10y: nudge(cachedCtx.us10y ?? 4.3, 0.01, 3.5, 5.5),
+    us10yChgBps: nudge(cachedCtx.us10yChgBps ?? 0, 0.6, -15, 15),
+    esChgPct: nudge(cachedCtx.esChgPct ?? 0, 0.08, -3, 3),
+    nqChgPct: nudge(cachedCtx.nqChgPct ?? 0, 0.1, -3.5, 3.5),
+    quotes: cachedCtx.quotes.map((q) => {
+      const last = Math.max(1, nudge(q.last, q.last * 0.003));
+      return { ...q, last, chgPct: nudge(q.chgPct, 0.05, -8, 8) };
+    })
   };
+  return cachedCtx;
 }
